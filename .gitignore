@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ── PySpark Project ───────────────────────────────────────────────────────────
+logs/
+data/output/
+validation_report.txt
+data/details.json
+data/search.json
