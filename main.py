@@ -157,6 +157,31 @@ def extract_search_fields(df):
     log("EXTRACT", "Search extraction complete", columns=extracted.columns)
     return extracted
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 4 – Data quality checks on search
+# ══════════════════════════════════════════════════════════════════════════════
+
+def search_quality_checks(search_df: DataFrame) -> dict:
+    """
+    Run mandatory data-quality checks on the extracted search DataFrame.
+
+    Returns
+    -------
+    dict with keys: missing_deep_link_url, missing_usd_price
+    """
+    log("QC", "Running search data quality checks")
+
+    missing_url   = search_df.filter(F.col("deep_link_url").isNull()).count()
+    missing_price = search_df.filter(F.col("usd_price").isNull()).count()
+
+    report = {
+        "missing_deep_link_url":    missing_url,
+        "missing_usd_price":        missing_price,
+    }
+    log("QC", "Search quality checks complete", **report)
+    return report
+
 # ---------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------
@@ -175,3 +200,10 @@ def main():
 
     details_raw_count = raw_details.count()
     search_raw_count  = raw_search.count()
+
+    # ── 3. Extract fields ─────────────────────────────────────────────────────
+    details_ext = extract_details_fields(raw_details)
+    search_ext  = extract_search_fields(raw_search)
+
+    # ── 4. Search quality checks ──────────────────────────────────────────────
+    qc_report = search_quality_checks(search_ext)
