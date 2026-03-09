@@ -78,7 +78,7 @@ def read_json(spark, path, label):
 # Step 2 – Extract fields from details
 # ══════════════════════════════════════════════════════════════════════════════
 
-def extract_details_fields(df: DataFrame) -> DataFrame:
+def extract_details_fields(df):
     """
     Flatten and rename the fields we need from details.json.
 
@@ -114,6 +114,49 @@ def extract_details_fields(df: DataFrame) -> DataFrame:
 
     log("EXTRACT", "Details extraction complete", columns=extracted.columns)
     return extracted
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 3 – Extract fields from search
+# ══════════════════════════════════════════════════════════════════════════════
+
+def extract_search_fields(df):
+    """
+    Flatten and rename the fields we need from search.json.
+
+    Extracted columns
+    -----------------
+    search_id, usd_price, commission_pct, meal_plan, deep_link_url
+    """
+    log("EXTRACT", "Extracting fields from search DataFrame")
+
+    extracted = df.select(
+        F.col("id").cast(StringType()).alias("search_id"),
+
+        # usd_price: use price.book as the booker currency price
+        F.col("price.book").cast(DoubleType()).alias("usd_price"),
+
+        # commission percentage
+        F.col("commission.percentage").cast(DoubleType()).alias("commission_pct"),
+
+        # meal_plan: first product's meal_plan meals list → join as string
+        F.col("products").getItem(0)
+         .getField("policies")
+         .getField("meal_plan")
+         .getField("meals")
+         .cast(StringType())
+         .alias("meal_plan"),
+
+        # deep_link_url for data quality checks
+        F.col("deep_link_url"),
+
+        # keep currency for reference
+        F.col("currency").alias("search_currency"),
+    )
+
+    log("EXTRACT", "Search extraction complete", columns=extracted.columns)
+    return extracted
+
 # ---------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------
