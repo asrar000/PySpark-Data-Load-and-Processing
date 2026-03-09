@@ -73,6 +73,47 @@ def read_json(spark, path, label):
     log("READ", f"{label} loaded", row_count=df.count(), columns=df.columns)
     return df
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 2 – Extract fields from details
+# ══════════════════════════════════════════════════════════════════════════════
+
+def extract_details_fields(df: DataFrame) -> DataFrame:
+    """
+    Flatten and rename the fields we need from details.json.
+
+    Extracted columns
+    -----------------
+    source_id, property_name, country_code, currency,
+    star_rating, review_score
+    """
+    log("EXTRACT", "Extracting fields from details DataFrame")
+
+    extracted = df.select(
+        F.col("id").cast(StringType()).alias("source_id"),
+
+        # name – prefer English, fall back to first available locale
+        F.coalesce(F.col("`name.en-us`"),F.col("name.`en-us`"),).alias("_name_en"),
+
+        # Nested name struct approach (handles both struct and map)
+        F.col("name"),
+
+        # location
+        F.trim(F.upper(F.col("location.country"))).alias("country_code"),
+
+        # currency
+        F.col("currency"),
+
+        # rating nested fields
+        F.col("rating.stars").cast(DoubleType()).alias("star_rating"),
+        F.col("rating.review_score").cast(DoubleType()).alias("review_score"),
+    )
+
+    # Resolve property_name: try name['en-us'] (MapType) or name.`en-us` (StructType)
+    extracted = extracted.withColumn("property_name",F.coalesce(F.col("name").getItem("en-us"),F.col("_name_en"),)).drop("_name_en", "name")
+
+    log("EXTRACT", "Details extraction complete", columns=extracted.columns)
+    return extracted
 # ---------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------
