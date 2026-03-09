@@ -162,7 +162,7 @@ def extract_search_fields(df):
 # Step 4 – Data quality checks on search
 # ══════════════════════════════════════════════════════════════════════════════
 
-def search_quality_checks(search_df: DataFrame) -> dict:
+def search_quality_checks(search_df):
     """
     Run mandatory data-quality checks on the extracted search DataFrame.
 
@@ -182,6 +182,46 @@ def search_quality_checks(search_df: DataFrame) -> dict:
     log("QC", "Search quality checks complete", **report)
     return report
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 5 – Drop rows with missing source_id
+# ══════════════════════════════════════════════════════════════════════════════
+
+def drop_missing_source_id(df):
+    """
+    Remove rows where source_id is null or empty.
+
+    Returns
+    -------
+    (clean_df, dropped_count)
+    """
+    before  = df.count()
+    clean   = df.filter(F.col("source_id").isNotNull() & (F.col("source_id") != ""))
+    dropped = before - clean.count()
+    log("VALIDATE", "Dropped rows with missing source_id", dropped=dropped)
+    return clean, dropped
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 6 – Deduplicate details
+# ══════════════════════════════════════════════════════════════════════════════
+
+def deduplicate(df, key):
+    """
+    Remove duplicate rows based on *key*, keeping the first occurrence.
+
+    Returns
+    -------
+    (deduplicated_df, count_before, count_after)
+    """
+    count_before = df.count()
+    df_dedup     = df.dropDuplicates([key])
+    count_after  = df_dedup.count()
+    dup_count    = count_before - count_after
+
+    log("DEDUP", f"Deduplication on '{key}'",
+        before=count_before, after=count_after, duplicates_removed=dup_count)
+    return df_dedup, count_before, count_after
 # ---------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------
@@ -207,3 +247,9 @@ def main():
 
     # ── 4. Search quality checks ──────────────────────────────────────────────
     qc_report = search_quality_checks(search_ext)
+
+    # ── 5. Drop rows with missing source_id ───────────────────────────────────
+    details_clean, dropped_source_id = drop_missing_source_id(details_ext)
+
+    # ── 6. Deduplicate details ────────────────────────────────────────────────
+    details_dedup, dup_before, dup_after = deduplicate(details_clean, "source_id")
