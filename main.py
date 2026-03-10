@@ -7,21 +7,19 @@ PySpark pipeline that:
   3. Produces a standardized final output
   4. Writes a validation_report.txt
   5. Writes structured JSON logs to logs/<date>/<script>_<date>_<time>.json
-
 """
 
 # ---------------------------------------------------------------------------
 # Standard library
 # ---------------------------------------------------------------------------
 import json
-from logging import log
-from datetime import datetime
 import os
+from datetime import datetime
 
 # ---------------------------------------------------------------------------
 # PySpark
 # ---------------------------------------------------------------------------
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, StringType, BooleanType
 
@@ -79,6 +77,7 @@ def flush_logs():
 # ---------------------------------------------------------------------------
 # SparkSession
 # ---------------------------------------------------------------------------
+
 def create_spark_session(app_name):
     """
     Create and return a local SparkSession.
@@ -100,7 +99,7 @@ def create_spark_session(app_name):
 
 
 # ---------------------------------------------------------------------------
-# Step 1 – Read data
+# Step 1 - Read data
 # ---------------------------------------------------------------------------
 
 def read_json(spark, path, label):
@@ -120,7 +119,7 @@ def read_json(spark, path, label):
 
 
 # ---------------------------------------------------------------------------
-# Step 2 – Extract fields from details
+# Step 2 - Extract fields from details
 # ---------------------------------------------------------------------------
 
 def extract_details_fields(df):
@@ -137,11 +136,8 @@ def extract_details_fields(df):
     extracted = df.select(
         F.col("id").cast(StringType()).alias("source_id"),
 
-        # name – prefer English, fall back to first available locale
-        F.coalesce(F.col("`name.en-us`"),F.col("name.`en-us`"),).alias("_name_en"),
-
-        # Nested name struct approach (handles both struct and map)
-        F.col("name"),
+        # name is a StructType - access en-us field using getField()
+        F.col("name").getField("en-us").alias("property_name"),
 
         # location
         F.trim(F.upper(F.col("location.country"))).alias("country_code"),
@@ -154,15 +150,12 @@ def extract_details_fields(df):
         F.col("rating.review_score").cast(DoubleType()).alias("review_score"),
     )
 
-    # Resolve property_name: try name['en-us'] (MapType) or name.`en-us` (StructType)
-    extracted = extracted.withColumn("property_name",F.coalesce(F.col("name").getItem("en-us"),F.col("_name_en"),)).drop("_name_en", "name")
-
     log("EXTRACT", "Details extraction complete", columns=extracted.columns)
     return extracted
 
 
 # ---------------------------------------------------------------------------
-# Step 3 – Extract fields from search
+# Step 3 - Extract fields from search
 # ---------------------------------------------------------------------------
 
 def extract_search_fields(df):
@@ -184,7 +177,7 @@ def extract_search_fields(df):
         # commission percentage
         F.col("commission.percentage").cast(DoubleType()).alias("commission_pct"),
 
-        # meal_plan: first product's meal_plan meals list → join as string
+        # meal_plan: first product's meal_plan meals list -> join as string
         F.col("products").getItem(0)
          .getField("policies")
          .getField("meal_plan")
@@ -204,7 +197,7 @@ def extract_search_fields(df):
 
 
 # ---------------------------------------------------------------------------
-# Step 4 – Data quality checks on search
+# Step 4 - Data quality checks on search
 # ---------------------------------------------------------------------------
 
 def search_quality_checks(search_df):
@@ -221,15 +214,15 @@ def search_quality_checks(search_df):
     missing_price = search_df.filter(F.col("usd_price").isNull()).count()
 
     report = {
-        "missing_deep_link_url":    missing_url,
-        "missing_usd_price":        missing_price,
+        "missing_deep_link_url": missing_url,
+        "missing_usd_price":     missing_price,
     }
     log("QC", "Search quality checks complete", **report)
     return report
 
 
 # ---------------------------------------------------------------------------
-# Step 5 – Drop rows with missing source_id
+# Step 5 - Drop rows with missing source_id
 # ---------------------------------------------------------------------------
 
 def drop_missing_source_id(df):
@@ -248,12 +241,12 @@ def drop_missing_source_id(df):
 
 
 # ---------------------------------------------------------------------------
-# Step 6 – Deduplicate details
+# Step 6 - Deduplicate details
 # ---------------------------------------------------------------------------
 
 def deduplicate(df, key):
     """
-    Remove duplicate rows based on *key*, keeping the first occurrence.
+    Remove duplicate rows based on key, keeping the first occurrence.
 
     Returns
     -------
@@ -264,7 +257,8 @@ def deduplicate(df, key):
     count_after  = df_dedup.count()
     dup_count    = count_before - count_after
 
-    log("DEDUP", f"Deduplication on '{key}'",before=count_before, after=count_after, duplicates_removed=dup_count)
+    log("DEDUP", f"Deduplication on '{key}'",
+        before=count_before, after=count_after, duplicates_removed=dup_count)
     return df_dedup, count_before, count_after
 
 
@@ -292,11 +286,12 @@ def build_matched_unmatched(details_df, search_df):
 
     unmatched = details_df.join(
         search_df,
-        details_df["source_id"] == search_df ["search_id"],
-        how="left_anti"
+        details_df["source_id"] == search_df["search_id"],
+        how="left_anti",
     )
 
-    log("JOIN", "Join complete",matched=matched.count(), unmatched=unmatched.count())
+    log("JOIN", "Join complete",
+        matched=matched.count(), unmatched=unmatched.count())
     return matched, unmatched
 
 
@@ -359,20 +354,27 @@ def build_final_output(matched_df):
         F.lit(config.DEFAULT_PUBLISHED).cast(BooleanType()).alias("published"),
     )
 
-    
+    # data_quality_flag (nice to have)
     final = final.withColumn(
         "data_quality_flag",
         F.when(
-            F.col("property_name").isNull()| F.col("usd_price").isNull()| (F.length(F.col("country_code")) != 2),
+            F.col("property_name").isNull()
+            | F.col("usd_price").isNull()
+            | (F.length(F.col("country_code")) != 2),
             F.lit("NEEDS_REVIEW"),
         ).otherwise(F.lit("GOOD")),
     )
 
-    log("TRANSFORM", "Final output built",columns=final.columns, 
-        total_columns=len(final.columns),defaulted_usd_price=defaulted_price_count)
+    log("TRANSFORM", "Final output built",
+        columns=final.columns, total_columns=len(final.columns),
+        defaulted_usd_price=defaulted_price_count)
 
     return final, defaulted_price_count
 
+
+# ---------------------------------------------------------------------------
+# Optional extras
+# ---------------------------------------------------------------------------
 
 def country_summary(final_df):
     """Print a country-level summary: total_properties and avg_review_score."""
@@ -430,14 +432,14 @@ def write_validation_report(
     """
     log("REPORT", "Writing validation report")
 
-    # Build schema string — loop through every column and format as "name: type"
+    # Build schema string - loop through every column and format as "name: type"
     schema_lines = []
     for f in final_df.schema.fields:
         line = f"  {f.name}: {f.dataType}"
         schema_lines.append(line)
     schema_str = "\n".join(schema_lines)
 
-    # Total column count — used in the report below
+    # Total column count - used in the report below
     col_count = len(final_df.columns)
 
     lines = [
@@ -489,7 +491,8 @@ def write_validation_report(
 # ---------------------------------------------------------------------------
 
 def main():
-    
+    """Orchestrate all pipeline steps end-to-end."""
+
     log("INIT", "Pipeline starting", app=config.APP_NAME)
 
     # 1. SparkSession
