@@ -7,7 +7,7 @@ Central configuration for the PySpark property pipeline.
 # ---------------------------------------------------------------------------
 # Input paths
 # ---------------------------------------------------------------------------
-INPUT_DETAILS_FILE = "data/details.json"
+INPUT_DETAILS_FILE = "data/property.json"
 INPUT_SEARCH_FILE  = "data/search.json"
 
 # ---------------------------------------------------------------------------
