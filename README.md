@@ -10,14 +10,15 @@ produces a standardized output, and writes a full validation report.
 ```
 PySpark-Data-Load-and-Processing/
 ├── data/
-│   ├── details.json                       <- place your input file here
-│   ├── search.json                        <- place your input file here
+│   ├── property.json                      <- place your details input file here
+│   ├── search.json                        <- place your search input file here
 │   └── output/
 │       ├── final_output/                  <- generated after run
 │       └── unmatched_details/             <- generated after run
 ├── logs/
 │   └── <YYMMDD>/
 │       └── main_<YYMMDD>_<HHMMSS>.json   <- generated after run
+├── .venv/                                 <- virtual environment (not committed)
 ├── main.py
 ├── config.py
 ├── requirements.txt
@@ -32,16 +33,19 @@ PySpark-Data-Load-and-Processing/
 Place your two input JSON files inside the `data/` folder:
 
 ```
-data/details.json
+data/property.json
 data/search.json
 ```
 
-These paths are configured in `config.py` and can be changed if needed:
+The input file paths are configured in `config.py`:
 
 ```python
-INPUT_DETAILS_FILE = "data/details.json"
+INPUT_DETAILS_FILE = "data/property.json"
 INPUT_SEARCH_FILE  = "data/search.json"
 ```
+
+If your file is named differently, just update the path in `config.py` -- no
+changes needed in `main.py`.
 
 ---
 
@@ -89,7 +93,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-You will see `(.venv)` appear at the start of your terminal prompt confirming it is active.
+You will see `(.venv)` appear at the start of your terminal prompt confirming
+it is active.
 
 ### 3. Install dependencies
 
@@ -102,8 +107,8 @@ pip install -r requirements.txt
 Copy your input JSON files into the `data/` folder:
 
 ```bash
-cp /path/to/your/details.json data/details.json
-cp /path/to/your/search.json  data/search.json
+cp /path/to/property.json data/property.json
+cp /path/to/search.json   data/search.json
 ```
 
 ---
@@ -133,7 +138,7 @@ All parameters are defined in `config.py`. No values are hard-coded in `main.py`
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `INPUT_DETAILS_FILE` | `data/details.json` | Path to details input file |
+| `INPUT_DETAILS_FILE` | `data/property.json` | Path to details input file |
 | `INPUT_SEARCH_FILE` | `data/search.json` | Path to search input file |
 | `JOIN_KEY` | `id` | Common key used to join both datasets |
 | `DEFAULT_CURRENCY` | `USD` | Fallback currency if missing |
@@ -161,20 +166,20 @@ All parameters are defined in `config.py`. No values are hard-coded in `main.py`
 | `commission` | commission.percentage from search |
 | `meal_plan` | From first product meal_plan in search |
 | `published` | Always true |
-| `data_quality_flag` | GOOD or NEEDS_REVIEW based on missing fields |
+| `data_quality_flag` | GOOD or NEEDS_REVIEW based on missing fields (bonus) |
 
 ---
 
 ## Pipeline Steps
 
 ```
-1.  Read details.json and search.json
+1.  Read property.json and search.json
 2.  Extract required fields from details
 3.  Extract required fields from search
 4.  Run data quality checks on search
 5.  Drop rows with missing source_id
 6.  Deduplicate details on source_id
-7.  Inner join  -> matched_details (42 rows)
+7.  Inner join  -> matched_details  (42 rows)
     Anti join   -> unmatched_details (57 rows)
 8.  Build standardized final output from matched_details
 9.  Write final_output and unmatched_details to disk
