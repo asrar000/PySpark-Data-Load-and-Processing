@@ -360,6 +360,84 @@ def extract_checkin_checkout(matched_df):
 
     print("\n-- Checkin / Checkout (top 10) ------------------------------")
     parsed.show(10, truncate=False)
+
+
+# ---------------------------------------------------------------------------
+# Step 9 - Validation report
+# ---------------------------------------------------------------------------
+
+def write_validation_report(
+    details_count,
+    search_count,
+    matched_count,
+    unmatched_count,
+    final_count,
+    dropped_source_id,
+    dup_before,
+    dup_after,
+    qc,
+    final_df,
+    bad_country_count,
+    defaulted_price,
+):
+    """
+    Write a human-readable validation_report.txt summarising all pipeline stats.
+    """
+    log("REPORT", "Writing validation report")
+
+    # Build schema string — loop through every column and format as "name: type"
+    schema_lines = []
+    for f in final_df.schema.fields:
+        line = f"  {f.name}: {f.dataType}"
+        schema_lines.append(line)
+    schema_str = "\n".join(schema_lines)
+
+    # Total column count — used in the report below
+    col_count = len(final_df.columns)
+
+    lines = [
+        "=" * 60,
+        "VALIDATION REPORT",
+        f"Generated: {datetime.now().isoformat()}",
+        "=" * 60,
+        "",
+        "-- Row Counts -----------------------------------------------",
+        f"  details.json row count         : {details_count}",
+        f"  search.json row count          : {search_count}",
+        f"  matched_details (inner join)   : {matched_count}",
+        f"  unmatched_details (anti join)  : {unmatched_count}",
+        f"  final output row count         : {final_count}",
+        "",
+        "-- Data Quality ---------------------------------------------",
+        f"  Dropped (missing source_id)    : {dropped_source_id}",
+        f"  Duplicates before dedup        : {dup_before}",
+        f"  Duplicates after dedup         : {dup_after}",
+        f"  Duplicates removed             : {dup_before - dup_after}",
+        f"  Dedup removal %                : {round((dup_before - dup_after) / max(dup_before,1) * 100, 2)}%",
+        "",
+        "-- Search Quality Checks ------------------------------------",
+        f"  Missing deep_link_url          : {qc['missing_deep_link_url']}",
+        f"  Missing usd_price (book)       : {qc['missing_usd_price']}",
+        "",
+        "-- Output Field Checks --------------------------------------",
+        f"  country_code length != 2       : {bad_country_count}",
+        f"  usd_price defaulted to 0.0     : {defaulted_price}",
+        "",
+        "-- Final Output Schema --------------------------------------",
+        schema_str,
+        "",
+        f"  Total columns in final output  : {col_count}",
+        f"  Schema has exactly 12 columns  : {'YES' if col_count == 13 else f'NO ({col_count}) - includes data_quality_flag bonus column'}",
+        "=" * 60,
+    ]
+
+    report_text = "\n".join(lines)
+    with open(config.VALIDATION_REPORT_PATH, "w") as fh:
+        fh.write(report_text)
+
+    print("\n" + report_text)
+    log("REPORT", "Validation report written", path=config.VALIDATION_REPORT_PATH)
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
