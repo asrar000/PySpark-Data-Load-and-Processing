@@ -327,6 +327,39 @@ def build_final_output(matched_df):
         total_columns=len(final.columns),defaulted_usd_price=defaulted_price_count)
 
     return final, defaulted_price_count
+
+
+def country_summary(final_df):
+    """Print a country-level summary: total_properties and avg_review_score."""
+    log("SUMMARY", "Building country summary table")
+    summary = (
+        final_df.groupBy("country_code")
+        .agg(
+            F.count("*").alias("total_properties"),
+            F.round(F.avg("review_score"), 2).alias("avg_review_score"),
+        )
+        .orderBy(F.desc("total_properties"))
+    )
+    print("\n-- Country Summary ------------------------------------------")
+    summary.show(truncate=False)
+
+
+def extract_checkin_checkout(matched_df):
+    """
+    Parse checkin / checkout dates from deep_link_url and show top 10 rows.
+    URL pattern: ...checkin=YYYY-MM-DD&checkout=YYYY-MM-DD
+    """
+    log("EXTRA", "Extracting checkin/checkout from deep_link_url")
+    parsed = matched_df.withColumn(
+        "checkin",
+        F.regexp_extract(F.col("deep_link_url"), r"checkin=(\d{4}-\d{2}-\d{2})", 1),
+    ).withColumn(
+        "checkout",
+        F.regexp_extract(F.col("deep_link_url"), r"checkout=(\d{4}-\d{2}-\d{2})", 1),
+    ).select("search_id", "deep_link_url", "checkin", "checkout")
+
+    print("\n-- Checkin / Checkout (top 10) ------------------------------")
+    parsed.show(10, truncate=False)
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
