@@ -15,9 +15,8 @@ PySpark pipeline that:
 # ---------------------------------------------------------------------------
 import json
 from logging import log
-import os
-import re
 from datetime import datetime
+import os
 
 # ---------------------------------------------------------------------------
 # PySpark
@@ -30,6 +29,52 @@ from pyspark.sql.types import DoubleType, StringType, BooleanType
 # Project config
 # ---------------------------------------------------------------------------
 import config
+
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+def _log_path():
+    """Return the JSON log file path: logs/<YYMMDD>/<script>_<YYMMDD>_<HHMMSS>.json"""
+    now     = datetime.now()
+    date    = now.strftime("%y%m%d")
+    time    = now.strftime("%H%M%S")
+    log_dir = os.path.join(config.LOG_BASE_DIR, date)
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, f"{config.SCRIPT_NAME}_{date}_{time}.json")
+
+
+LOG_FILE   = _log_path()
+_log_lines = []
+
+
+def log(step, message, **extra):
+    """
+    Append a structured log entry to memory and print to stdout.
+
+    Parameters
+    ----------
+    step    : Pipeline step label (e.g. 'READ', 'JOIN').
+    message : Human-readable description.
+    **extra : Any additional key/value pairs to include in the log entry.
+    """
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "step":      step,
+        "message":   message,
+        **extra,
+    }
+    _log_lines.append(entry)
+    print(f"[{entry['timestamp']}] [{step}] {message}" +
+          (f" | {extra}" if extra else ""))
+
+
+def flush_logs():
+    """Write all accumulated log entries to the JSON log file."""
+    with open(LOG_FILE, "w") as fh:
+        json.dump(_log_lines, fh, indent=2, default=str)
+    print(f"\nLogs written -> {LOG_FILE}")
+
 
 # ---------------------------------------------------------------------------
 # SparkSession
@@ -438,34 +483,102 @@ def write_validation_report(
     print("\n" + report_text)
     log("REPORT", "Validation report written", path=config.VALIDATION_REPORT_PATH)
 
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main():
-    """Orchestrate all pipeline steps end-to-end."""
 
+def main():
+    
     log("INIT", "Pipeline starting", app=config.APP_NAME)
 
-    # ── 1. SparkSession ───────────────────────────────────────────────────────
+    # 1. SparkSession
     spark = create_spark_session(config.APP_NAME)
     log("INIT", "SparkSession created")
 
-    # ── 2. Read raw data ──────────────────────────────────────────────────────
+    # 2. Read raw data
     raw_details = read_json(spark, config.INPUT_DETAILS_FILE, "details")
     raw_search  = read_json(spark, config.INPUT_SEARCH_FILE,  "search")
 
     details_raw_count = raw_details.count()
     search_raw_count  = raw_search.count()
 
-    # ── 3. Extract fields ─────────────────────────────────────────────────────
+    # 3. Extract fields
     details_ext = extract_details_fields(raw_details)
     search_ext  = extract_search_fields(raw_search)
 
-    # ── 4. Search quality checks ──────────────────────────────────────────────
+    # 4. Search quality checks
     qc_report = search_quality_checks(search_ext)
 
-    # ── 5. Drop rows with missing source_id ───────────────────────────────────
+    # 5. Drop rows with missing source_id
     details_clean, dropped_source_id = drop_missing_source_id(details_ext)
 
-    # ── 6. Deduplicate details ────────────────────────────────────────────────
+    # 6. Deduplicate details
     details_dedup, dup_before, dup_after = deduplicate(details_clean, "source_id")
+
+    # 7. Join -> matched / unmatched
+    matched_details, unmatched_details = build_matched_unmatched(
+        details_dedup, search_ext
+    )
+
+    matched_count   = matched_details.count()
+    unmatched_count = unmatched_details.count()
+
+    # 8. Build final output
+    final_output, defaulted_price = build_final_output(matched_details)
+    final_count = final_output.count()
+
+    # 9. Data quality checks on final output
+    bad_country_count = final_output.filter(
+        F.length(F.col("country_code")) != 2
+    ).count()
+    log("QC", "Country code length check", bad_country_code_rows=bad_country_count)
+
+    # 10. Show sample rows (nice to have)
+    print("\n-- Top 5: details (extracted) -------------------------------")
+    details_dedup.show(5, truncate=True)
+
+    print("\n-- Top 5: search (extracted) --------------------------------")
+    search_ext.show(5, truncate=True)
+
+    print("\n-- Top 5: final output --------------------------------------")
+    final_output.show(5, truncate=True)
+
+    # 11. Optional extras
+    country_summary(final_output)
+    extract_checkin_checkout(matched_details)
+
+    usd_defaulted_count = final_output.filter(F.col("usd_price") == 0.0).count()
+    print(f"\n  Rows where usd_price was defaulted to 0.0: {usd_defaulted_count}")
+
+    # 12. Write outputs
+    log("WRITE", "Writing final_output", path=config.OUTPUT_FINAL_DIR)
+    final_output.coalesce(1).write.mode("overwrite").json(config.OUTPUT_FINAL_DIR)
+
+    log("WRITE", "Writing unmatched_details", path=config.OUTPUT_UNMATCHED_DIR)
+    unmatched_details.coalesce(1).write.mode("overwrite").json(config.OUTPUT_UNMATCHED_DIR)
+
+    # 13. Validation report
+    write_validation_report(
+        details_count     = details_raw_count,
+        search_count      = search_raw_count,
+        matched_count     = matched_count,
+        unmatched_count   = unmatched_count,
+        final_count       = final_count,
+        dropped_source_id = dropped_source_id,
+        dup_before        = dup_before,
+        dup_after         = dup_after,
+        qc                = qc_report,
+        final_df          = final_output,
+        bad_country_count = bad_country_count,
+        defaulted_price   = defaulted_price,
+    )
+
+    # 14. Flush logs
+    log("DONE", "Pipeline complete")
+    flush_logs()
+    spark.stop()
+
+
+if __name__ == "__main__":
+    main()
