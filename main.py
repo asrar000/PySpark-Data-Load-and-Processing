@@ -219,10 +219,42 @@ def deduplicate(df, key):
     count_after  = df_dedup.count()
     dup_count    = count_before - count_after
 
-    log("DEDUP", f"Deduplication on '{key}'",
-        before=count_before, after=count_after, duplicates_removed=dup_count)
+    log("DEDUP", f"Deduplication on '{key}'",before=count_before, after=count_after, duplicates_removed=dup_count)
     return df_dedup, count_before, count_after
+
+
 # ---------------------------------------------------------------------------
+# Step 7 - Join
+# ---------------------------------------------------------------------------
+
+def build_matched_unmatched(details_df, search_df):
+    """
+    Perform INNER JOIN (matched) and LEFT ANTI JOIN (unmatched).
+
+    Join key: details.source_id == search.search_id
+
+    Returns
+    -------
+    (matched_details, unmatched_details)
+    """
+    log("JOIN", "Building matched and unmatched DataFrames")
+
+    matched = details_df.join(
+        search_df,
+        details_df["source_id"] == search_df["search_id"],
+        how="inner",
+    )
+
+    unmatched = details_df.join(
+        search_df,
+        details_df["source_id"] == search_df ["search_id"],
+        how="left_anti"
+    )
+
+    log("JOIN", "Join complete",matched=matched.count(), unmatched=unmatched.count())
+    return matched, unmatched
+    
+# # ---------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------
 def main():
