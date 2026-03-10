@@ -254,6 +254,79 @@ def build_matched_unmatched(details_df, search_df):
     log("JOIN", "Join complete",matched=matched.count(), unmatched=unmatched.count())
     return matched, unmatched
 
+
+# ---------------------------------------------------------------------------
+# Step 8 - Build final standardized output
+# ---------------------------------------------------------------------------
+
+def make_slug(name_col):
+    """Convert a property name to a lowercase dash-separated slug."""
+    return F.lower(F.regexp_replace(F.trim(name_col), r"[^a-zA-Z0-9]+", "-"))
+
+
+def build_final_output(matched_df):
+    """
+    Apply all output-field rules to matched_details to produce the
+    standardized 12-column final output.
+
+    Rules applied
+    -------------
+    - id               = 'GEN-' + source_id
+    - feed_provider_id = source_id
+    - property_name    = from details
+    - property_slug    = lowercase dash-separated from property_name
+    - country_code     = trimmed uppercase (flag rows != 2 chars)
+    - currency         = 'USD' if missing
+    - usd_price        = price.book (default 0.0)
+    - star_rating      = 0.0 if missing
+    - review_score     = 0.0 if missing
+    - commission       = commission_pct
+    - meal_plan        = from search products
+    - published        = true
+
+    Returns
+    -------
+    (final_df, defaulted_usd_price_count)
+    """
+    log("TRANSFORM", "Building final standardized output")
+
+    # Count rows where usd_price will be defaulted
+    defaulted_price_count = matched_df.filter(F.col("usd_price").isNull()).count()
+
+    final = matched_df.select(
+        F.concat_ws("-", F.lit("GEN"), F.col("source_id")).alias("id"),
+        F.col("source_id").alias("feed_provider_id"),
+        F.col("property_name"),
+        make_slug(F.col("property_name")).alias("property_slug"),
+        F.col("country_code"),
+        F.coalesce(F.col("currency"), F.lit(config.DEFAULT_CURRENCY)).alias("currency"),
+        F.coalesce(
+            F.col("usd_price"), F.lit(config.DEFAULT_USD_PRICE)
+        ).cast(DoubleType()).alias("usd_price"),
+        F.coalesce(
+            F.col("star_rating"), F.lit(config.DEFAULT_STAR_RATING)
+        ).cast(DoubleType()).alias("star_rating"),
+        F.coalesce(
+            F.col("review_score"), F.lit(config.DEFAULT_REVIEW_SCORE)
+        ).cast(DoubleType()).alias("review_score"),
+        F.col("commission_pct").alias("commission"),
+        F.col("meal_plan"),
+        F.lit(config.DEFAULT_PUBLISHED).cast(BooleanType()).alias("published"),
+    )
+
+    
+    final = final.withColumn(
+        "data_quality_flag",
+        F.when(
+            F.col("property_name").isNull()| F.col("usd_price").isNull()| (F.length(F.col("country_code")) != 2),
+            F.lit("NEEDS_REVIEW"),
+        ).otherwise(F.lit("GOOD")),
+    )
+
+    log("TRANSFORM", "Final output built",columns=final.columns, 
+        total_columns=len(final.columns),defaulted_usd_price=defaulted_price_count)
+
+    return final, defaulted_price_count
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
