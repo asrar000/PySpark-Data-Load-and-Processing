@@ -32,7 +32,7 @@ import config
 # Logging helpers
 # ---------------------------------------------------------------------------
 
-def _log_path():
+def log_path():
     """Return the JSON log file path: logs/<YYMMDD>/<script>_<YYMMDD>_<HHMMSS>.json"""
     now     = datetime.now()
     date    = now.strftime("%y%m%d")
@@ -42,8 +42,8 @@ def _log_path():
     return os.path.join(log_dir, f"{config.SCRIPT_NAME}_{date}_{time}.json")
 
 
-LOG_FILE   = _log_path()
-_log_lines = []
+LOG_FILE   = log_path()
+log_lines = []
 
 
 def log(step, message, **extra):
@@ -62,7 +62,7 @@ def log(step, message, **extra):
         "message":   message,
         **extra,
     }
-    _log_lines.append(entry)
+    log_lines.append(entry)
     print(f"[{entry['timestamp']}] [{step}] {message}" +
           (f" | {extra}" if extra else ""))
 
@@ -70,7 +70,7 @@ def log(step, message, **extra):
 def flush_logs():
     """Write all accumulated log entries to the JSON log file."""
     with open(LOG_FILE, "w") as fh:
-        json.dump(_log_lines, fh, indent=2, default=str)
+        json.dump(log_lines, fh, indent=2, default=str)
     print(f"\nLogs written -> {LOG_FILE}")
 
 
@@ -372,10 +372,6 @@ def build_final_output(matched_df):
     return final, defaulted_price_count
 
 
-# ---------------------------------------------------------------------------
-# Optional extras
-# ---------------------------------------------------------------------------
-
 def country_summary(final_df):
     """Print a country-level summary: total_properties and avg_review_score."""
     log("SUMMARY", "Building country summary table")
@@ -491,7 +487,7 @@ def write_validation_report(
 # ---------------------------------------------------------------------------
 
 def main():
-    """Orchestrate all pipeline steps end-to-end."""
+    """main() orchestrates all steps"""
 
     log("INIT", "Pipeline starting", app=config.APP_NAME)
 
@@ -578,7 +574,6 @@ def main():
     )
 
     # 14. Flush logs
-    log("DONE", "Pipeline complete")
     flush_logs()
     spark.stop()
 
