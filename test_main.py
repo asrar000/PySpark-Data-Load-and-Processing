@@ -13,7 +13,7 @@ Run continuously with py-watch (in a separate terminal):
 import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, BooleanType
+from pyspark.sql.types import DoubleType
 
 # Import the functions we want to test from main.py
 from main import (
@@ -376,3 +376,109 @@ def test_make_slug_replaces_spaces_with_dashes(spark):
     result = df.select(make_slug(F.col("name")).alias("slug")).collect()[0]["slug"]
     assert "-" in result
     assert " " not in result
+
+
+# ---------------------------------------------------------------------------
+# Tests for build_final_output()
+# ---------------------------------------------------------------------------
+
+def test_final_output_has_13_columns(spark):
+    """
+    Final output must have 13 columns:
+    12 required + 1 bonus data_quality_flag column.
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+    search_ext = extract_search_fields(make_search_df(spark))
+    matched, _ = build_matched_unmatched(details_clean, search_ext)
+
+    final, _ = build_final_output(matched)
+    assert len(final.columns) == 13
+
+
+def test_final_output_id_starts_with_gen(spark):
+    """
+    The 'id' column must always start with 'GEN-'.
+    e.g. source_id=101 -> id='GEN-101'
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+    search_ext = extract_search_fields(make_search_df(spark))
+    matched, _ = build_matched_unmatched(details_clean, search_ext)
+
+    final, _ = build_final_output(matched)
+    ids = [row["id"] for row in final.collect()]
+    for record_id in ids:
+        assert record_id.startswith("GEN-")
+
+
+def test_final_output_published_is_always_true(spark):
+    """
+    The 'published' column must be True for every row.
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+    search_ext = extract_search_fields(make_search_df(spark))
+    matched, _ = build_matched_unmatched(details_clean, search_ext)
+
+    final, _ = build_final_output(matched)
+    published_values = [row["published"] for row in final.collect()]
+    for v in published_values:
+        assert v is True
+
+
+def test_final_output_usd_price_defaults_to_zero(spark):
+    """
+    When usd_price is null in search, it should be defaulted to 0.0 in final output.
+    Row with search_id=102 has null price -> should become 0.0.
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+    search_ext = extract_search_fields(make_search_df(spark))
+    matched, _ = build_matched_unmatched(details_clean, search_ext)
+
+    final, _ = build_final_output(matched)
+
+    for row in final.collect():
+        if row["feed_provider_id"] == "102":
+            assert row["usd_price"] == 0.0
+
+def test_final_output_currency_defaults_to_usd(spark):
+    """
+    When currency is null or missing, it should default to 'USD'.
+    """
+    # Build a details df with null currency
+    df = spark.createDataFrame(
+        [("201", "Test Hotel", "US", None, 3.0, 7.5)],
+        ["source_id", "property_name", "country_code", "currency", "star_rating", "review_score"]
+    )
+    search_df = spark.createDataFrame(
+        [("201", 100.0, 5.0, "USD", None, "booking://hotel/201")],
+        ["search_id", "usd_price", "commission_pct", "search_currency", "meal_plan", "deep_link_url"]
+    )
+    matched = df.join(search_df, df["source_id"] == search_df["search_id"], "inner")
+
+    final, _ = build_final_output(matched)
+    currency = final.collect()[0]["currency"]
+    assert currency == "USD"
+
+
+def test_final_output_data_quality_flag_good(spark):
+    """
+    Rows with all key fields present and valid 2-char country code
+    should get a 'GOOD' data_quality_flag.
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+    search_ext = extract_search_fields(make_search_df(spark))
+    matched, _ = build_matched_unmatched(details_clean, search_ext)
+
+    final, _ = build_final_output(matched)
+
+    for row in final.collect():
+        if row["feed_provider_id"] == "101":
+            assert row["data_quality_flag"] == "GOOD"
+
+
+
+
