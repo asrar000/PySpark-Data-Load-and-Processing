@@ -296,3 +296,58 @@ def test_deduplicate_no_duplicates_unchanged(spark):
     _, before, after = deduplicate(clean, "source_id")
 
     assert before == after
+
+
+# ---------------------------------------------------------------------------
+# Tests for build_matched_unmatched()
+# ---------------------------------------------------------------------------
+
+def test_matched_count_is_correct(spark):
+    """
+    details has ids 101, 102.  search has ids 101, 102, 103.
+    Inner join should give 2 matched rows (101 and 102 overlap).
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+
+    search_ext = extract_search_fields(make_search_df(spark))
+
+    matched, _ = build_matched_unmatched(details_clean, search_ext)
+    assert matched.count() == 2
+
+
+def test_unmatched_count_is_correct(spark):
+    """
+    details has ids 101, 102. search has 101, 102, 103.
+    Anti-join should give 0 unmatched rows from details side
+    (both 101 and 102 exist in search).
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+
+    search_ext = extract_search_fields(make_search_df(spark))
+
+    _, unmatched = build_matched_unmatched(details_clean, search_ext)
+    assert unmatched.count() == 0
+
+
+def test_unmatched_when_details_has_extra_id(spark):
+    """
+    If we add an extra id (999) to details that does NOT exist in search,
+    that row should appear in unmatched.
+    """
+    details_ext = extract_details_fields(make_details_df(spark))
+    details_clean, _ = drop_missing_source_id(details_ext)
+
+    # Add an extra row with source_id=999 (not in search)
+    extra = spark.createDataFrame(
+        [("999", "New Hotel", "DE", "EUR", 5.0, 9.0)],
+        ["source_id", "property_name", "country_code", "currency", "star_rating", "review_score"]
+    )
+    details_with_extra = details_clean.union(extra)
+
+    search_ext = extract_search_fields(make_search_df(spark))
+    _, unmatched = build_matched_unmatched(details_with_extra, search_ext)
+
+    assert unmatched.count() == 1
+    assert unmatched.collect()[0]["source_id"] == "999"
