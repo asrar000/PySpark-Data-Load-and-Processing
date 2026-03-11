@@ -351,3 +351,4 @@ def test_unmatched_when_details_has_extra_id(spark):
 
     assert unmatched.count() == 1
     assert unmatched.collect()[0]["source_id"] == "999"
+
