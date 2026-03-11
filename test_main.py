@@ -221,3 +221,78 @@ def test_search_quality_checks_returns_dict(spark):
     assert isinstance(report, dict)
     assert "missing_deep_link_url" in report
     assert "missing_usd_price" in report
+
+
+# ---------------------------------------------------------------------------
+# Tests for drop_missing_source_id()
+# ---------------------------------------------------------------------------
+
+def test_drop_missing_source_id_removes_null_rows(spark):
+    """
+    Our details sample has 3 rows; 1 has a null id.
+    After extraction + drop, we should have 2 rows.
+    """
+    raw = make_details_df(spark)
+    extracted = extract_details_fields(raw)
+    clean, _ = drop_missing_source_id(extracted)
+
+    assert clean.count() == 2
+
+
+def test_drop_missing_source_id_dropped_count_is_correct(spark):
+    """
+    The returned dropped count should equal 1 (we have 1 null source_id row).
+    """
+    raw = make_details_df(spark)
+    extracted = extract_details_fields(raw)
+    _, dropped = drop_missing_source_id(extracted)
+
+    assert dropped == 1
+
+
+def test_drop_missing_source_id_no_nulls_in_result(spark):
+    """
+    After the function runs, no row in the result should have a null source_id.
+    """
+    raw = make_details_df(spark)
+    extracted = extract_details_fields(raw)
+    clean, _ = drop_missing_source_id(extracted)
+
+    null_count = clean.filter(F.col("source_id").isNull()).count()
+    assert null_count == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests for deduplicate()
+# ---------------------------------------------------------------------------
+
+def test_deduplicate_removes_exact_duplicates(spark):
+    """
+    If we add a duplicate row, dedup should remove it and return count_after < count_before.
+    """
+    raw = make_details_df(spark)
+    extracted = extract_details_fields(raw)
+    clean, _ = drop_missing_source_id(extracted)
+
+    # Add a duplicate of the first row
+    first_row = clean.limit(1)
+    with_dup = clean.union(first_row)  # now 3 rows, one is a duplicate
+
+    deduped, before, after = deduplicate(with_dup, "source_id")
+
+    assert before == 3
+    assert after == 2
+    assert deduped.count() == 2
+
+
+def test_deduplicate_no_duplicates_unchanged(spark):
+    """
+    If there are no duplicates, count_before should equal count_after.
+    """
+    raw = make_details_df(spark)
+    extracted = extract_details_fields(raw)
+    clean, _ = drop_missing_source_id(extracted)  # 2 rows, no duplicates
+
+    _, before, after = deduplicate(clean, "source_id")
+
+    assert before == after
