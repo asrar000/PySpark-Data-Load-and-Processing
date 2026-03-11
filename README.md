@@ -21,6 +21,7 @@ PySpark-Data-Load-and-Processing/
 ├── .venv/                                 <- virtual environment (not committed)
 ├── main.py
 ├── config.py
+├── test_main.py                           <- pytest unit tests
 ├── requirements.txt
 ├── validation_report.txt                  <- generated after run
 └── README.md
@@ -118,6 +119,42 @@ cp /path/to/search.json   data/search.json
 ```bash
 python3 main.py
 ```
+
+---
+
+## Testing
+
+### Run all tests once
+
+```bash
+pytest test_main.py -v
+```
+
+The `-v` flag prints each test name and whether it passed or failed.
+
+### Run tests continuously during development
+
+Open a separate terminal, activate the virtual environment, then run:
+
+```bash
+ptw test_main.py -v
+```
+
+This watches for any file changes and automatically reruns the tests every
+time you save `test_main.py` or `main.py`.
+
+### What the tests cover
+
+| Function | What is tested |
+|----------|----------------|
+| `extract_details_fields` | Correct columns, uppercase country code, source_id cast to string |
+| `extract_search_fields` | Correct columns, search_id cast to string |
+| `search_quality_checks` | Missing URL count, missing price count, return type |
+| `drop_missing_source_id` | Null rows removed, dropped count, no nulls remain |
+| `deduplicate` | Duplicates removed, clean data unchanged |
+| `build_matched_unmatched` | Matched count, unmatched count, extra id goes to unmatched |
+| `make_slug` | Lowercase output, dashes instead of spaces |
+| `build_final_output` | 13 columns, GEN- prefix, published=True, price defaults, currency defaults, data_quality_flag |
 
 ---
 
