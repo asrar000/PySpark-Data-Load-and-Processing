@@ -26,3 +26,27 @@ from main import (
     build_final_output,
     make_slug,
 )
+
+
+# ---------------------------------------------------------------------------
+# Fixture: SparkSession
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def spark():
+    """
+    Create a single SparkSession for the entire test session.
+    'scope=session' means Spark starts once and is reused for all tests.
+    This makes tests run much faster.
+    """
+    session = (
+        SparkSession.builder
+        .appName("test_main")
+        .master("local[1]")
+        .config("spark.sql.shuffle.partitions", "1")
+        .config("spark.ui.enabled", "false")
+        .getOrCreate()
+    )
+    session.sparkContext.setLogLevel("ERROR")
+    yield session
+    session.stop()
