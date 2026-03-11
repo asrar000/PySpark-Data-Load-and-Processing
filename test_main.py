@@ -182,3 +182,42 @@ def test_extract_search_fields_search_id_is_string(spark):
 
     id_type = dict(result.dtypes)["search_id"]
     assert id_type == "string"
+
+
+# ---------------------------------------------------------------------------
+# Tests for search_quality_checks()
+# ---------------------------------------------------------------------------
+
+def test_search_quality_checks_missing_deep_link(spark):
+    """
+    One row in our sample has a null deep_link_url, so the count should be 1.
+    """
+    raw = make_search_df(spark)
+    search_ext = extract_search_fields(raw)
+    report = search_quality_checks(search_ext)
+
+    assert report["missing_deep_link_url"] == 1
+
+
+def test_search_quality_checks_missing_usd_price(spark):
+    """
+    One row in our sample has a null price, so missing_usd_price should be 1.
+    """
+    raw = make_search_df(spark)
+    search_ext = extract_search_fields(raw)
+    report = search_quality_checks(search_ext)
+
+    assert report["missing_usd_price"] == 1
+
+
+def test_search_quality_checks_returns_dict(spark):
+    """
+    The function must always return a dict with the two expected keys.
+    """
+    raw = make_search_df(spark)
+    search_ext = extract_search_fields(raw)
+    report = search_quality_checks(search_ext)
+
+    assert isinstance(report, dict)
+    assert "missing_deep_link_url" in report
+    assert "missing_usd_price" in report
