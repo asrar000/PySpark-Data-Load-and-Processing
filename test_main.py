@@ -69,7 +69,7 @@ def make_details_df(spark):
     ]
     df = spark.createDataFrame(data, ["id", "name_en_us", "country", "currency", "stars", "review_score"])
 
-    # Wrap into the nested shape that extract_details_fields() expects
+    # Replicate the JSON structure that extract_details_fields() expects
     df = df.select(
         F.col("id"),
         F.struct(F.col("name_en_us").alias("en-us")).alias("name"),
@@ -96,7 +96,7 @@ def make_search_df(spark):
     ]
     df = spark.createDataFrame(data, ["id", "price_book", "commission_pct", "deep_link_url", "currency"])
 
-    # Wrap into the nested shape that extract_search_fields() expects
+    # Replicate the JSON structure that extract_search_fields() expects
     df = df.select(
         F.col("id"),
         F.struct(F.col("price_book").cast(DoubleType()).alias("book")).alias("price"),
@@ -115,3 +115,70 @@ def make_search_df(spark):
         F.col("currency"),
     )
     return df
+
+
+# ---------------------------------------------------------------------------
+# Tests for extract_details_fields()
+# ---------------------------------------------------------------------------
+
+def test_extract_details_fields_columns(spark):
+    """
+    After extraction, the DataFrame must have exactly these 6 columns.
+    """
+    raw = make_details_df(spark)
+    result = extract_details_fields(raw)
+
+    expected_cols = {"source_id", "property_name", "country_code", "currency", "star_rating", "review_score"}
+    assert set(result.columns) == expected_cols
+
+
+def test_extract_details_fields_country_is_uppercase(spark):
+    """
+    country_code should be trimmed and UPPERCASE regardless of input case.
+    'us' in the raw data should become 'US'.
+    """
+    raw = make_details_df(spark)
+    result = extract_details_fields(raw)
+
+    # Collect country codes and make sure they are all uppercase
+    for row in result.collect():
+        code = row["country_code"]
+        if code:
+            assert code.isupper()
+
+
+def test_extract_details_fields_source_id_is_string(spark):
+    """
+    source_id must be cast to StringType (the raw id is an integer in the JSON).
+    """
+    raw = make_details_df(spark)
+    result = extract_details_fields(raw)
+
+    id_type = dict(result.dtypes)["source_id"]
+    assert id_type == "string"
+
+
+# ---------------------------------------------------------------------------
+# Tests for extract_search_fields()
+# ---------------------------------------------------------------------------
+
+def test_extract_search_fields_columns(spark):
+    """
+    After extraction, the DataFrame must have exactly these 6 columns.
+    """
+    raw = make_search_df(spark)
+    result = extract_search_fields(raw)
+
+    expected_cols = {"search_id", "usd_price", "commission_pct", "meal_plan", "deep_link_url", "search_currency"}
+    assert set(result.columns) == expected_cols
+
+
+def test_extract_search_fields_search_id_is_string(spark):
+    """
+    search_id must be a string (raw id is an integer).
+    """
+    raw = make_search_df(spark)
+    result = extract_search_fields(raw)
+
+    id_type = dict(result.dtypes)["search_id"]
+    assert id_type == "string"
