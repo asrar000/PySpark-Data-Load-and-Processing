@@ -352,3 +352,27 @@ def test_unmatched_when_details_has_extra_id(spark):
     assert unmatched.count() == 1
     assert unmatched.collect()[0]["source_id"] == "999"
 
+
+# ---------------------------------------------------------------------------
+# Tests for make_slug()
+# ---------------------------------------------------------------------------
+
+def test_make_slug_lowercase(spark):
+    """
+    make_slug should produce all lowercase text.
+    'Grand Hotel' -> 'grand-hotel'
+    """
+    df = spark.createDataFrame([("Grand Hotel",)], ["name"])
+    result = df.select(make_slug(F.col("name")).alias("slug")).collect()[0]["slug"]
+    assert result == "grand-hotel"
+
+
+def test_make_slug_replaces_spaces_with_dashes(spark):
+    """
+    Spaces and special characters should become dashes.
+    'Sea View Inn!' -> 'sea-view-inn-'
+    """
+    df = spark.createDataFrame([("Sea View Inn!",)], ["name"])
+    result = df.select(make_slug(F.col("name")).alias("slug")).collect()[0]["slug"]
+    assert "-" in result
+    assert " " not in result
