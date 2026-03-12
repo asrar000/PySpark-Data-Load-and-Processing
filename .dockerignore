@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# .dockerignore
+# Excludes files from the Docker build context.
+# Smaller build context = faster builds.
+# ---------------------------------------------------------------------------
+
+# Virtual environment — dependencies are installed inside the container
+.venv/
+venv/
+env/
+
+# Input data and generated output — mounted as volumes at runtime
+data/property.json
+data/search.json
+data/output/
+
+# Generated files
+logs/
+validation_report.txt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Git
+.git/
+.gitignore
+
+# Docker files themselves
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
