@@ -65,7 +65,7 @@ def make_details_df(spark):
         # (id, name_en_us, country, currency, stars, review_score)
         (101, "Grand Hotel",   "US", "USD", 4.0, 8.5),
         (102, "Sea View Inn",  "GB", "GBP", 3.0, 7.0),
-        (None, "Ghost Hotel",  "FR", "EUR", 2.0, 6.0),  
+        (None, "Ghost Hotel",  "FR", "EUR", 2.0, 6.0),
     ]
     df = spark.createDataFrame(data, ["id", "name_en_us", "country", "currency", "stars", "review_score"])
 
@@ -140,7 +140,6 @@ def test_extract_details_fields_country_is_uppercase(spark):
     raw = make_details_df(spark)
     result = extract_details_fields(raw)
 
-    # Collect country codes and make sure they are all uppercase
     for row in result.collect():
         code = row["country_code"]
         if code:
@@ -274,9 +273,8 @@ def test_deduplicate_removes_exact_duplicates(spark):
     extracted = extract_details_fields(raw)
     clean, _ = drop_missing_source_id(extracted)
 
-    # Add a duplicate of the first row
     first_row = clean.limit(1)
-    with_dup = clean.union(first_row)  # now 3 rows, one is a duplicate
+    with_dup = clean.union(first_row)
 
     deduped, before, after = deduplicate(with_dup, "source_id")
 
@@ -291,7 +289,7 @@ def test_deduplicate_no_duplicates_unchanged(spark):
     """
     raw = make_details_df(spark)
     extracted = extract_details_fields(raw)
-    clean, _ = drop_missing_source_id(extracted)  # 2 rows, no duplicates
+    clean, _ = drop_missing_source_id(extracted)
 
     _, before, after = deduplicate(clean, "source_id")
 
@@ -304,12 +302,11 @@ def test_deduplicate_no_duplicates_unchanged(spark):
 
 def test_matched_count_is_correct(spark):
     """
-    details has ids 101, 102.  search has ids 101, 102, 103.
-    Inner join should give 2 matched rows (101 and 102 overlap).
+    details has ids 101, 102. search has ids 101, 102, 103.
+    Inner join should give 2 matched rows.
     """
     details_ext = extract_details_fields(make_details_df(spark))
     details_clean, _ = drop_missing_source_id(details_ext)
-
     search_ext = extract_search_fields(make_search_df(spark))
 
     matched, _ = build_matched_unmatched(details_clean, search_ext)
@@ -319,12 +316,10 @@ def test_matched_count_is_correct(spark):
 def test_unmatched_count_is_correct(spark):
     """
     details has ids 101, 102. search has 101, 102, 103.
-    Anti-join should give 0 unmatched rows from details side
-    (both 101 and 102 exist in search).
+    Anti-join should give 0 unmatched rows from details side.
     """
     details_ext = extract_details_fields(make_details_df(spark))
     details_clean, _ = drop_missing_source_id(details_ext)
-
     search_ext = extract_search_fields(make_search_df(spark))
 
     _, unmatched = build_matched_unmatched(details_clean, search_ext)
@@ -339,7 +334,6 @@ def test_unmatched_when_details_has_extra_id(spark):
     details_ext = extract_details_fields(make_details_df(spark))
     details_clean, _ = drop_missing_source_id(details_ext)
 
-    # Add an extra row with source_id=999 (not in search)
     extra = spark.createDataFrame(
         [("999", "New Hotel", "DE", "EUR", 5.0, 9.0)],
         ["source_id", "property_name", "country_code", "currency", "star_rating", "review_score"]
@@ -370,7 +364,6 @@ def test_make_slug_lowercase(spark):
 def test_make_slug_replaces_spaces_with_dashes(spark):
     """
     Spaces and special characters should become dashes.
-    'Sea View Inn!' -> 'sea-view-inn-'
     """
     df = spark.createDataFrame([("Sea View Inn!",)], ["name"])
     result = df.select(make_slug(F.col("name")).alias("slug")).collect()[0]["slug"]
@@ -399,7 +392,6 @@ def test_final_output_has_13_columns(spark):
 def test_final_output_id_starts_with_gen(spark):
     """
     The 'id' column must always start with 'GEN-'.
-    e.g. source_id=101 -> id='GEN-101'
     """
     details_ext = extract_details_fields(make_details_df(spark))
     details_clean, _ = drop_missing_source_id(details_ext)
@@ -422,14 +414,13 @@ def test_final_output_published_is_always_true(spark):
     matched, _ = build_matched_unmatched(details_clean, search_ext)
 
     final, _ = build_final_output(matched)
-    published_values = [row["published"] for row in final.collect()]
-    for v in published_values:
-        assert v is True
+    for row in final.collect():
+        assert row["published"] is True
 
 
 def test_final_output_usd_price_defaults_to_zero(spark):
     """
-    When usd_price is null in search, it should be defaulted to 0.0 in final output.
+    When usd_price is null in search, it should be defaulted to 0.0.
     Row with search_id=102 has null price -> should become 0.0.
     """
     details_ext = extract_details_fields(make_details_df(spark))
@@ -438,16 +429,15 @@ def test_final_output_usd_price_defaults_to_zero(spark):
     matched, _ = build_matched_unmatched(details_clean, search_ext)
 
     final, _ = build_final_output(matched)
-
     for row in final.collect():
         if row["feed_provider_id"] == "102":
             assert row["usd_price"] == 0.0
+
 
 def test_final_output_currency_defaults_to_usd(spark):
     """
     When currency is null or missing, it should default to 'USD'.
     """
-    # Build a details df with null currency
     df = spark.createDataFrame(
         [("201", "Test Hotel", "US", None, 3.0, 7.5)],
         ["source_id", "property_name", "country_code", "currency", "star_rating", "review_score"]
@@ -474,11 +464,6 @@ def test_final_output_data_quality_flag_good(spark):
     matched, _ = build_matched_unmatched(details_clean, search_ext)
 
     final, _ = build_final_output(matched)
-
     for row in final.collect():
         if row["feed_provider_id"] == "101":
             assert row["data_quality_flag"] == "GOOD"
-
-
-
-
