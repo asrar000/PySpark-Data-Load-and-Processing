@@ -23,6 +23,11 @@ PySpark-Data-Load-and-Processing/
 ├── config.py
 ├── test_main.py                           <- pytest unit tests
 ├── requirements.txt
+├── pytest.ini
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
+├── .gitignore
 ├── validation_report.txt                  <- generated after run
 └── README.md
 ```
@@ -45,14 +50,76 @@ INPUT_DETAILS_FILE = "data/property.json"
 INPUT_SEARCH_FILE  = "data/search.json"
 ```
 
-If your file is named differently, just update the path in `config.py` -- no
-changes needed in `main.py`.
+If your file is named differently, update the path in `config.py` and no
+changes are needed in `main.py`.
 
 ---
 
-## Prerequisites
+## Option A: Run With Docker
 
-### Java
+This is the recommended way to run the project. Docker handles Java, Python,
+and all dependencies automatically — no local setup required.
+
+### Prerequisites
+
+Install Docker Desktop from https://www.docker.com/products/docker-desktop
+
+Verify it is running:
+
+```bash
+docker --version
+docker compose version
+```
+
+### 1. Place your input files
+
+```bash
+cp /path/to/property.json data/property.json
+cp /path/to/search.json   data/search.json
+```
+
+### 2. Build the Docker image
+
+```bash
+docker compose build
+```
+
+This only needs to be done once, or when `requirements.txt` or `Dockerfile` changes.
+
+### 3. Run the pipeline
+
+```bash
+docker compose up pipeline
+```
+
+Output files will be written to your local `data/output/` and `logs/` folders
+because they are mounted as volumes.
+
+### 4. Run the tests
+
+```bash
+docker compose up tests
+```
+
+### 5. Run both pipeline and tests
+
+```bash
+docker compose up
+```
+
+### 6. Clean up containers after use
+
+```bash
+docker compose down
+```
+
+---
+
+## Option B: Run Locally Without Docker
+
+### Prerequisites
+
+#### Java
 
 PySpark requires Java to be installed. Java 11, 17, or 21 are all supported.
 
@@ -70,7 +137,7 @@ source ~/.bashrc
 echo $JAVA_HOME
 ```
 
-### Python
+#### Python
 
 Python 3.10 or higher is required.
 
@@ -78,43 +145,36 @@ Python 3.10 or higher is required.
 python3 --version
 ```
 
----
+### Setup
 
-## Setup
-
-### 1. Create a virtual environment
+#### 1. Create a virtual environment
 
 ```bash
 python3 -m venv .venv
 ```
 
-### 2. Activate the virtual environment
+#### 2. Activate the virtual environment
 
 ```bash
 source .venv/bin/activate
 ```
 
-You will see `(.venv)` appear at the start of your terminal prompt confirming
-it is active.
+You will see `(.venv)` appear at the start of your terminal prompt.
 
-### 3. Install dependencies
+#### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Place input files
-
-Copy your input JSON files into the `data/` folder:
+#### 4. Place input files
 
 ```bash
 cp /path/to/property.json data/property.json
 cp /path/to/search.json   data/search.json
 ```
 
----
-
-## Running the Pipeline
+### Run the pipeline
 
 ```bash
 python3 main.py
@@ -124,24 +184,28 @@ python3 main.py
 
 ## Testing
 
-### Run all tests once
+### Run all tests once (local)
 
 ```bash
 pytest test_main.py -v
 ```
 
-The `-v` flag prints each test name and whether it passed or failed.
+### Run all tests once (Docker)
+
+```bash
+docker compose up tests
+```
 
 ### Run tests continuously during development
 
-Open a separate terminal, activate the virtual environment, then run:
+Open a second terminal, activate the virtual environment, then run:
 
 ```bash
 ptw test_main.py -v
 ```
 
-This watches for any file changes and automatically reruns the tests every
-time you save `test_main.py` or `main.py`.
+`ptw` watches all files and automatically reruns the tests every time you
+save `test_main.py` or `main.py`.
 
 ### What the tests cover
 
@@ -149,11 +213,11 @@ time you save `test_main.py` or `main.py`.
 |----------|----------------|
 | `extract_details_fields` | Correct columns, uppercase country code, source_id cast to string |
 | `extract_search_fields` | Correct columns, search_id cast to string |
-| `search_quality_checks` | Missing URL count, missing price count, return type |
-| `drop_missing_source_id` | Null rows removed, dropped count, no nulls remain |
-| `deduplicate` | Duplicates removed, clean data unchanged |
+| `search_quality_checks` | Missing URL count, missing price count, return type and keys |
+| `drop_missing_source_id` | Null rows removed, dropped count correct, no nulls in result |
+| `deduplicate` | Duplicates removed, count_before equals count_after when no dups |
 | `build_matched_unmatched` | Matched count, unmatched count, extra id goes to unmatched |
-| `make_slug` | Lowercase output, dashes instead of spaces |
+| `make_slug` | Lowercase output, spaces replaced with dashes |
 | `build_final_output` | 13 columns, GEN- prefix, published=True, price defaults, currency defaults, data_quality_flag |
 
 ---
@@ -226,9 +290,7 @@ All parameters are defined in `config.py`. No values are hard-coded in `main.py`
 
 ---
 
-## Every Time You Open a New Terminal
-
-The virtual environment needs to be activated again before running the pipeline:
+## Every Time You Open a New Terminal (local)
 
 ```bash
 source .venv/bin/activate
