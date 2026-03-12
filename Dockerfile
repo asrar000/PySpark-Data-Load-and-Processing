@@ -38,9 +38,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project source code
 # ---------------------------------------------------------------------------
 COPY main.py       .
+COPY logger.py     .
 COPY config.py     .
 COPY test_main.py  .
 COPY pytest.ini    .
+COPY utils/        ./utils/
 
 # ---------------------------------------------------------------------------
 # Create directories that the pipeline writes to at runtime
