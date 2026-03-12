@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# docker-compose.yml
+# PySpark Property Search Pipeline
+# ---------------------------------------------------------------------------
+#
+# Two services:
+#   pipeline  — runs the full ETL pipeline (python3 main.py)
+#   tests     — runs the pytest test suite (pytest test_main.py -v)
+#
+# Usage:
+#   Run the pipeline:   docker compose up pipeline
+#   Run the tests:      docker compose up tests
+#   Run both:           docker compose up
+# ---------------------------------------------------------------------------
+
+services:
+
+  # --------------------------------------------------------------------------
+  # pipeline — runs the full ETL job
+  # --------------------------------------------------------------------------
+  pipeline:
+    build: .
+    container_name: pyspark_pipeline
+    command: python3 main.py
+    volumes:
+      # Mount data folder so input files are read and output files are saved
+      # back to your local machine after the container finishes
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # --------------------------------------------------------------------------
+  # tests — runs the pytest suite
+  # --------------------------------------------------------------------------
+  tests:
+    build: .
+    container_name: pyspark_tests
+    command: pytest test_main.py -v
+    environment:
+      - PYTHONUNBUFFERED=1
