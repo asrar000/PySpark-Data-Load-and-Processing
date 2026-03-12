@@ -432,13 +432,32 @@ def test_final_output_currency_defaults_to_usd(spark):
     """
     When currency is null or missing, it should default to 'USD'.
     """
+    from pyspark.sql.types import StructType, StructField, StringType, DoubleType
+
+    details_schema = StructType([
+        StructField("source_id",     StringType(), True),
+        StructField("property_name", StringType(), True),
+        StructField("country_code",  StringType(), True),
+        StructField("currency",      StringType(), True),
+        StructField("star_rating",   DoubleType(), True),
+        StructField("review_score",  DoubleType(), True),
+    ])
+    search_schema = StructType([
+        StructField("search_id",       StringType(), True),
+        StructField("usd_price",       DoubleType(), True),
+        StructField("commission_pct",  DoubleType(), True),
+        StructField("search_currency", StringType(), True),
+        StructField("meal_plan",       StringType(), True),
+        StructField("deep_link_url",   StringType(), True),
+    ])
+
     df = spark.createDataFrame(
         [("201", "Test Hotel", "US", None, 3.0, 7.5)],
-        ["source_id", "property_name", "country_code", "currency", "star_rating", "review_score"]
+        details_schema,
     )
     search_df = spark.createDataFrame(
         [("201", 100.0, 5.0, "USD", None, "booking://hotel/201")],
-        ["search_id", "usd_price", "commission_pct", "search_currency", "meal_plan", "deep_link_url"]
+        search_schema,
     )
     matched = df.join(search_df, df["source_id"] == search_df["search_id"], "inner")
 
