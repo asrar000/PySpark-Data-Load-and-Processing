@@ -15,17 +15,11 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
 
-# Import the functions we want to test from main.py
-from main import (
-    extract_details_fields,
-    extract_search_fields,
-    search_quality_checks,
-    drop_missing_source_id,
-    deduplicate,
-    build_matched_unmatched,
-    build_final_output,
-    make_slug,
-)
+# Import the functions we want to test
+from utils.transforms import extract_details_fields, extract_search_fields, build_final_output, make_slug
+from utils.cleaning   import drop_missing_source_id, deduplicate
+from utils.joins      import build_matched_unmatched
+from utils.quality    import search_quality_checks
 
 
 # ---------------------------------------------------------------------------
