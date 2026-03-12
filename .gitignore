@@ -83,8 +83,6 @@ dmypy.json
 # Docker
 # ---------------------------------------------------------------------------
 .docker/
-*.env
-docker-compose.override.yml
 
 # ---------------------------------------------------------------------------
 # PySpark project
@@ -92,5 +90,3 @@ docker-compose.override.yml
 logs/
 data/output/
 validation_report.txt
-data/property.json
-data/search.json

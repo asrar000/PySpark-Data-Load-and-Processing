@@ -10,8 +10,6 @@ venv/
 env/
 
 # Input data and generated output — mounted as volumes at runtime
-data/property.json
-data/search.json
 data/output/
 
 # Generated files
