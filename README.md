@@ -18,9 +18,19 @@ PySpark-Data-Load-and-Processing/
 ├── logs/
 │   └── <YYMMDD>/
 │       └── main_<YYMMDD>_<HHMMSS>.json   <- generated after run
+├── utils/
+│   ├── __init__.py
+│   ├── spark_session.py                   <- SparkSession factory
+│   ├── readers.py                         <- JSON file reader
+│   ├── transforms.py                      <- field extraction and output transforms
+│   ├── cleaning.py                        <- null removal and deduplication
+│   ├── joins.py                           <- inner and anti join logic
+│   ├── quality.py                         <- quality checks and validation report
+│   └── extras.py                          <- country summary and checkin/checkout parser
 ├── .venv/                                 <- virtual environment (not committed)
-├── main.py
-├── config.py
+├── main.py                                <- orchestration only
+├── logger.py                              <- structured JSON logger
+├── config.py                              <- all parameters and paths
 ├── test_main.py                           <- pytest unit tests
 ├── requirements.txt
 ├── pytest.ini
@@ -51,7 +61,7 @@ INPUT_SEARCH_FILE  = "data/search.json"
 ```
 
 If your file is named differently, update the path in `config.py` and no
-changes are needed in `main.py`.
+changes are needed anywhere else.
 
 ---
 
@@ -205,7 +215,7 @@ ptw test_main.py -v
 ```
 
 `ptw` watches all files and automatically reruns the tests every time you
-save `test_main.py` or `main.py`.
+save `test_main.py` or any file in `utils/`.
 
 ### What the tests cover
 
@@ -215,7 +225,7 @@ save `test_main.py` or `main.py`.
 | `extract_search_fields` | Correct columns, search_id cast to string |
 | `search_quality_checks` | Missing URL count, missing price count, return type and keys |
 | `drop_missing_source_id` | Null rows removed, dropped count correct, no nulls in result |
-| `deduplicate` | Duplicates removed, count_before equals count_after when no dups |
+| `deduplicate` | Duplicates removed, count unchanged when no duplicates exist |
 | `build_matched_unmatched` | Matched count, unmatched count, extra id goes to unmatched |
 | `make_slug` | Lowercase output, spaces replaced with dashes |
 | `build_final_output` | 13 columns, GEN- prefix, published=True, price defaults, currency defaults, data_quality_flag |
